@@ -1,0 +1,132 @@
+//design source of Immediate Generator//
+
+`timescale 1ns / 1ps
+module immediate_generator(
+    input  wire [31:0] instruction,
+    output reg  [31:0] immediate
+    );
+    wire [6:0] opcode;
+
+    assign opcode = instruction[6:0];
+
+    always @(*) begin
+        case (opcode)
+
+            // I-type: ADDI and loads
+            7'b0010011,
+            7'b0000011: begin
+                immediate = {
+                    {20{instruction[31]}},
+                    instruction[31:20]
+                };
+            end
+
+            // S-type: stores
+            7'b0100011: begin
+                immediate = {
+                    {20{instruction[31]}},
+                    instruction[31:25],
+                    instruction[11:7]
+                };
+            end
+
+            // B-type: conditional branches
+            7'b1100011: begin
+                immediate = {
+                    {19{instruction[31]}},
+                    instruction[31],
+                    instruction[7],
+                    instruction[30:25],
+                    instruction[11:8],
+                    1'b0
+                };
+            end
+
+            // U-type: LUI and AUIPC
+            7'b0110111,
+            7'b0010111: begin
+                immediate = {
+                    instruction[31:12],
+                    12'b0
+                };
+            end
+
+            // J-type: JAL
+            7'b1101111: begin
+                immediate = {
+                    {11{instruction[31]}},
+                    instruction[31],
+                    instruction[19:12],
+                    instruction[20],
+                    instruction[30:21],
+                    1'b0
+                };
+            end
+
+            // Unsupported instruction format
+            default: begin
+                immediate = 32'b0;
+            end
+
+        endcase
+    end
+
+endmodule
+
+//testbench code//
+
+`timescale 1ns / 1ps
+module tb_immediate_generator(
+
+    );
+     reg  [31:0] instruction;
+    wire [31:0] immediate;
+
+    immediate_generator dut (
+        .instruction(instruction),
+        .immediate(immediate)
+    );
+
+    initial begin
+
+        // I-type: ADDI x1, x0, 10
+        instruction = 32'h00A00093;
+        #10;
+        if (immediate !== 32'd10)
+            $fatal(1, "FAIL: Positive I-type immediate");
+
+        // I-type: ADDI x1, x0, -5
+        instruction = 32'hFFB00093;
+        #10;
+        if (immediate !== 32'hFFFFFFFB)
+            $fatal(1, "FAIL: Negative I-type immediate");
+
+        // S-type: SW x3, 12(x2)
+        instruction = 32'h00312623;
+        #10;
+        if (immediate !== 32'd12)
+            $fatal(1, "FAIL: S-type immediate");
+
+        // B-type: BEQ x1, x2, +8
+        instruction = 32'h00208463;
+        #10;
+        if (immediate !== 32'd8)
+            $fatal(1, "FAIL: B-type immediate");
+
+        // U-type: LUI x5, 1
+        instruction = 32'h000012B7;
+        #10;
+        if (immediate !== 32'h00001000)
+            $fatal(1, "FAIL: U-type immediate");
+
+        // J-type: JAL x1, +8
+        instruction = 32'h008000EF;
+        #10;
+        if (immediate !== 32'd8)
+            $fatal(1, "FAIL: J-type immediate");
+
+        $display("PASS: All immediate generator tests completed.");
+        $finish;
+
+    end
+endmodule

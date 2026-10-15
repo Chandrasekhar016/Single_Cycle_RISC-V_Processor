@@ -1,0 +1,133 @@
+//design source of alu//
+
+`timescale 1ns / 1ps
+module alu(
+    input  wire [31:0] operand_a,
+    input  wire [31:0] operand_b,
+    input  wire [3:0]  alu_control,
+
+    output reg  [31:0] result,
+    output wire        zero
+    );
+    always @(*) begin
+        case (alu_control)
+
+            4'b0000: result = operand_a + operand_b; // ADD
+
+            4'b0001: result = operand_a - operand_b; // SUB
+
+            4'b0010: result = operand_a & operand_b; // AND
+
+            4'b0011: result = operand_a | operand_b; // OR
+
+            4'b0100: result = operand_a ^ operand_b; // XOR
+
+            4'b0101: begin // SLT: signed comparison
+                if ($signed(operand_a) < $signed(operand_b))
+                    result = 32'd1;
+                else
+                    result = 32'd0;
+            end
+
+            default: result = 32'b0;
+
+        endcase
+    end
+
+    assign zero = (result == 32'b0);
+endmodule
+
+//testbench code//
+
+`timescale 1ns / 1ps
+module tb_alu(
+
+    );
+    reg [31:0] operand_a;
+    reg [31:0] operand_b;
+    reg [3:0]  alu_control;
+
+    wire [31:0] result;
+    wire zero;
+
+    alu dut (
+        .operand_a(operand_a),
+        .operand_b(operand_b),
+        .alu_control(alu_control),
+        .result(result),
+        .zero(zero)
+    );
+
+    initial begin
+
+        // ADD: 10 + 20 = 30
+        operand_a = 32'd10;
+        operand_b = 32'd20;
+        alu_control = 4'b0000;
+        #10;
+        if (result !== 32'd30 || zero !== 1'b0)
+            $fatal(1, "FAIL: ADD");
+
+        // SUB: 20 - 10 = 10
+        operand_a = 32'd20;
+        operand_b = 32'd10;
+        alu_control = 4'b0001;
+        #10;
+        if (result !== 32'd10 || zero !== 1'b0)
+            $fatal(1, "FAIL: SUB");
+
+        // AND
+        operand_a = 32'h0000000A;
+        operand_b = 32'h0000000C;
+        alu_control = 4'b0010;
+        #10;
+        if (result !== 32'h00000008)
+            $fatal(1, "FAIL: AND");
+
+        // OR
+        alu_control = 4'b0011;
+        #10;
+        if (result !== 32'h0000000E)
+            $fatal(1, "FAIL: OR");
+
+        // XOR
+        alu_control = 4'b0100;
+        #10;
+        if (result !== 32'h00000006)
+            $fatal(1, "FAIL: XOR");
+
+        // SLT: 10 < 20
+        operand_a = 32'd10;
+        operand_b = 32'd20;
+        alu_control = 4'b0101;
+        #10;
+        if (result !== 32'd1)
+            $fatal(1, "FAIL: SLT true");
+
+        // SLT: 20 is not less than 10
+        operand_a = 32'd20;
+        operand_b = 32'd10;
+        #10;
+        if (result !== 32'd0 || zero !== 1'b1)
+            $fatal(1, "FAIL: SLT false");
+
+        // Signed SLT: -1 < 1
+        operand_a = 32'hFFFFFFFF;
+        operand_b = 32'd1;
+        #10;
+        if (result !== 32'd1)
+            $fatal(1, "FAIL: Signed SLT");
+
+        // SUB equality: 15 - 15 = 0
+        operand_a = 32'd15;
+        operand_b = 32'd15;
+        alu_control = 4'b0001;
+        #10;
+        if (result !== 32'd0 || zero !== 1'b1)
+            $fatal(1, "FAIL: Zero flag");
+
+        $display("PASS: All ALU tests completed.");
+        $finish;
+
+    end
+endmodule

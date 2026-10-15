@@ -1,0 +1,144 @@
+//design source of data memory//
+`timescale 1ns / 1ps
+module data_memory(
+    input  wire        clk,
+    input  wire        mem_read,
+    input  wire        mem_write,
+    input  wire [31:0] address,
+    input  wire [31:0] write_data,
+
+    output wire [31:0] read_data
+    );
+    reg [31:0] memory [0:63];
+    integer i;
+
+    // Initialize data memory to zero for simulation
+    initial begin
+        for (i = 0; i < 64; i = i + 1)
+            memory[i] = 32'b0;
+    end
+
+    // Synchronous write
+    always @(posedge clk) begin
+        if (mem_write &&
+            (address[31:8] == 24'b0) &&
+            (address[1:0] == 2'b00)) begin
+
+            memory[address[7:2]] <= write_data;
+        end
+    end
+
+    // Combinational read
+    assign read_data =
+        (mem_read &&
+         (address[31:8] == 24'b0) &&
+         (address[1:0] == 2'b00))
+        ? memory[address[7:2]]
+        : 32'b0;
+endmodule
+
+//testbench code//
+
+`timescale 1ns / 1ps
+module tb_data_memory(
+
+    );
+    reg clk;
+    reg mem_read;
+    reg mem_write;
+    reg [31:0] address;
+    reg [31:0] write_data;
+
+    wire [31:0] read_data;
+
+    data_memory dut (
+        .clk(clk),
+        .mem_read(mem_read),
+        .mem_write(mem_write),
+        .address(address),
+        .write_data(write_data),
+        .read_data(read_data)
+    );
+
+    // 10 ns clock period
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        mem_read  = 1'b0;
+        mem_write = 1'b0;
+        address   = 32'b0;
+        write_data = 32'b0;
+
+        // Write 30 to byte address 0
+        @(negedge clk);
+        address   = 32'h00000000;
+        write_data = 32'd30;
+        mem_write = 1'b1;
+
+        @(posedge clk);
+        #1;
+        if (dut.memory[0] !== 32'd30)
+            $fatal(1, "FAIL: Write to memory word 0");
+
+        // Read word 0
+        @(negedge clk);
+        mem_write = 1'b0;
+        mem_read  = 1'b1;
+        #1;
+        if (read_data !== 32'd30)
+            $fatal(1, "FAIL: Read memory word 0");
+
+        // Write 100 to byte address 4
+        @(negedge clk);
+        mem_read  = 1'b0;
+        mem_write = 1'b1;
+        address   = 32'h00000004;
+        write_data = 32'd100;
+
+        @(posedge clk);
+        #1;
+        if (dut.memory[1] !== 32'd100)
+            $fatal(1, "FAIL: Write to memory word 1");
+
+        // Read word 1
+        @(negedge clk);
+        mem_write = 1'b0;
+        mem_read  = 1'b1;
+        #1;
+        if (read_data !== 32'd100)
+            $fatal(1, "FAIL: Read memory word 1");
+
+        // Read disabled
+        mem_read = 1'b0;
+        #1;
+        if (read_data !== 32'b0)
+            $fatal(1, "FAIL: Read disabled");
+
+        // Attempt an unaligned write; it must be ignored
+        @(negedge clk);
+        address    = 32'h00000001;
+        write_data = 32'd999;
+        mem_write  = 1'b1;
+
+        @(posedge clk);
+        #1;
+        if (dut.memory[0] !== 32'd30)
+            $fatal(1, "FAIL: Unaligned write was accepted");
+
+        // Out-of-range read must return zero
+        @(negedge clk);
+        mem_write = 1'b0;
+        mem_read  = 1'b1;
+        address   = 32'h00000100;
+        #1;
+        if (read_data !== 32'b0)
+            $fatal(1, "FAIL: Out-of-range read");
+
+        $display("PASS: All data memory tests completed.");
+        $finish;
+
+    end
+endmodule

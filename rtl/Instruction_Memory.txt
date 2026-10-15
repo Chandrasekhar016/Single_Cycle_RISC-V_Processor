@@ -1,0 +1,76 @@
+//design source of Instruction Memory //
+`timescale 1ns / 1ps
+module instruction_memory(
+    input  wire [31:0] address,
+    output wire [31:0] instruction
+    );
+     reg [31:0] memory [0:63];
+    integer i;
+
+    // Initialize all locations to RISC-V NOP
+    initial begin
+        for (i = 0; i < 64; i = i + 1)
+            memory[i] = 32'h00000013;
+
+        // Sample program for testing
+        memory[0] = 32'h00A00093; // ADDI x1, x0, 10
+        memory[1] = 32'h01400113; // ADDI x2, x0, 20
+        memory[2] = 32'h002081B3; // ADD  x3, x1, x2
+    end
+
+    // Combinational instruction read
+    assign instruction =
+        (address[31:2] < 30'd64)
+        ? memory[address[7:2]]
+        : 32'h00000013;
+endmodule
+
+//testbench code//
+
+`timescale 1ns / 1ps
+module tb_instruction_memory(
+
+    );
+    reg  [31:0] address;
+    wire [31:0] instruction;
+
+    instruction_memory dut (
+        .address(address),
+        .instruction(instruction)
+    );
+
+    initial begin
+        // Fetch instruction at address 0x00
+        address = 32'h00000000;
+        #10;
+        if (instruction !== 32'h00A00093)
+            $fatal(1, "FAIL: Instruction at address 0");
+
+        // Fetch instruction at address 0x04
+        address = 32'h00000004;
+        #10;
+        if (instruction !== 32'h01400113)
+            $fatal(1, "FAIL: Instruction at address 4");
+
+        // Fetch instruction at address 0x08
+        address = 32'h00000008;
+        #10;
+        if (instruction !== 32'h002081B3)
+            $fatal(1, "FAIL: Instruction at address 8");
+
+        // Fetch an unused, initialized memory location
+        address = 32'h0000000C;
+        #10;
+        if (instruction !== 32'h00000013)
+            $fatal(1, "FAIL: NOP at address 12");
+
+        // Fetch an out-of-range address
+        address = 32'h00000100;
+        #10;
+        if (instruction !== 32'h00000013)
+            $fatal(1, "FAIL: Out-of-range address");
+
+        $display("PASS: All instruction memory tests completed.");
+        $finish;
+    end
+endmodule

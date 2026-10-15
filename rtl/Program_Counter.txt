@@ -1,0 +1,79 @@
+//design source of Program Counter//
+`timescale 1ns / 1ps
+module program_counter(
+    input clk,
+    input reset,
+    input [31:0] next_pc,
+    output reg [31:0] pc
+    );
+    always @(posedge clk) begin
+        if (reset)
+            pc <= 32'h00000000;
+        else
+            pc <= next_pc;
+    end
+
+endmodule
+
+// testbench //
+
+`timescale 1ns / 1ps
+module tb_program_counter(
+
+    );
+    reg clk;
+    reg reset;
+    reg [31:0] next_pc;
+    wire [31:0] pc;
+
+    program_counter dut (
+        .clk(clk),
+        .reset(reset),
+        .next_pc(next_pc),
+        .pc(pc)
+    );
+
+    // Generate a 10 ns clock period
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        reset = 1'b1;
+        next_pc = 32'h00000004;
+
+        // Hold reset across the first rising edge
+        @(posedge clk);
+        #1;
+        if (pc !== 32'h00000000)
+            $fatal(1, "FAIL: PC reset");
+
+        // Load address 0x04
+        reset = 1'b0;
+        next_pc = 32'h00000004;
+        @(posedge clk);
+        #1;
+        if (pc !== 32'h00000004)
+            $fatal(1, "FAIL: PC update to 0x04");
+
+        // Load address 0x08
+        next_pc = 32'h00000008;
+        @(posedge clk);
+        #1;
+        if (pc !== 32'h00000008)
+            $fatal(1, "FAIL: PC update to 0x08");
+
+        // Reset must override next_pc
+        reset = 1'b1;
+        next_pc = 32'h00000020;
+        @(posedge clk);
+        #1;
+        if (pc !== 32'h00000000)
+            $fatal(1, "FAIL: Reset priority");
+
+        $display("PASS: All program counter tests completed.");
+        $finish;
+    end
+endmodule
+

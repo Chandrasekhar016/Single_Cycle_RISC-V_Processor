@@ -1,0 +1,200 @@
+//design source of Main control//
+`timescale 1ns / 1ps
+module main_control(
+    input  wire [6:0] opcode,
+
+    output reg        reg_write,
+    output reg        mem_read,
+    output reg        mem_write,
+    output reg        mem_to_reg,
+    output reg        alu_src,
+    output reg        branch,
+    output reg        jump,
+    output reg  [1:0] alu_op,
+    output reg  [1:0] result_src
+    );
+     always @(*) begin
+
+        // Safe default values
+        reg_write = 1'b0;
+        mem_read  = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src   = 1'b0;
+        branch    = 1'b0;
+        jump      = 1'b0;
+        alu_op    = 2'b00;
+        result_src = 2'b00;
+
+        case (opcode)
+
+            // R-type: ADD, SUB, AND, OR, XOR, SLT
+            7'b0110011: begin
+                reg_write = 1'b1;
+                alu_src   = 1'b0;
+                alu_op    = 2'b10;
+                result_src = 2'b00;
+            end
+
+            // I-type arithmetic: ADDI
+            7'b0010011: begin
+                reg_write = 1'b1;
+                alu_src   = 1'b1;
+                alu_op    = 2'b00;
+                result_src = 2'b00;
+            end
+
+            // Load word: LW
+            7'b0000011: begin
+                reg_write = 1'b1;
+                mem_read  = 1'b1;
+                mem_to_reg = 1'b1;
+                alu_src   = 1'b1;
+                alu_op    = 2'b00;
+                result_src = 2'b01;
+            end
+
+            // Store word: SW
+            7'b0100011: begin
+                mem_write = 1'b1;
+                alu_src   = 1'b1;
+                alu_op    = 2'b00;
+            end
+
+            // Branch if equal: BEQ
+            7'b1100011: begin
+                branch = 1'b1;
+                alu_src = 1'b0;
+                alu_op = 2'b01;
+            end
+
+            // Jump and link: JAL
+            7'b1101111: begin
+                reg_write = 1'b1;
+                jump = 1'b1;
+                result_src = 2'b10;
+            end
+
+            // Load upper immediate: LUI
+            7'b0110111: begin
+                reg_write = 1'b1;
+                result_src = 2'b11;
+            end
+
+            // Unsupported opcode: all control signals remain at defaults
+            default: begin
+                // No action
+            end
+
+        endcase
+
+    end
+endmodule
+
+//testbench//
+
+
+`timescale 1ns / 1ps
+module tb_main_control(
+
+    );
+     reg [6:0] opcode;
+
+    wire reg_write;
+    wire mem_read;
+    wire mem_write;
+    wire mem_to_reg;
+    wire alu_src;
+    wire branch;
+    wire jump;
+    wire [1:0] alu_op;
+    wire [1:0] result_src;
+
+    main_control dut (
+        .opcode(opcode),
+        .reg_write(reg_write),
+        .mem_read(mem_read),
+        .mem_write(mem_write),
+        .mem_to_reg(mem_to_reg),
+        .alu_src(alu_src),
+        .branch(branch),
+        .jump(jump),
+        .alu_op(alu_op),
+        .result_src(result_src)
+    );
+
+    initial begin
+
+        // R-type
+        opcode = 7'b0110011;
+        #10;
+        if (reg_write !== 1'b1 ||
+            alu_src !== 1'b0 ||
+            alu_op !== 2'b10 ||
+            result_src !== 2'b00)
+            $fatal(1, "FAIL: R-type control");
+
+        // ADDI
+        opcode = 7'b0010011;
+        #10;
+        if (reg_write !== 1'b1 ||
+            alu_src !== 1'b1 ||
+            alu_op !== 2'b00)
+            $fatal(1, "FAIL: ADDI control");
+
+        // LW
+        opcode = 7'b0000011;
+        #10;
+        if (reg_write !== 1'b1 ||
+            mem_read !== 1'b1 ||
+            mem_write !== 1'b0 ||
+            mem_to_reg !== 1'b1 ||
+            result_src !== 2'b01)
+            $fatal(1, "FAIL: LW control");
+
+        // SW
+        opcode = 7'b0100011;
+        #10;
+        if (reg_write !== 1'b0 ||
+            mem_write !== 1'b1 ||
+            alu_src !== 1'b1)
+            $fatal(1, "FAIL: SW control");
+
+        // BEQ
+        opcode = 7'b1100011;
+        #10;
+        if (branch !== 1'b1 ||
+            alu_op !== 2'b01 ||
+            reg_write !== 1'b0)
+            $fatal(1, "FAIL: BEQ control");
+
+        // JAL
+        opcode = 7'b1101111;
+        #10;
+        if (jump !== 1'b1 ||
+            reg_write !== 1'b1 ||
+            result_src !== 2'b10)
+            $fatal(1, "FAIL: JAL control");
+
+        // LUI
+        opcode = 7'b0110111;
+        #10;
+        if (reg_write !== 1'b1 ||
+            result_src !== 2'b11)
+            $fatal(1, "FAIL: LUI control");
+
+        // Unsupported opcode must disable side effects
+        opcode = 7'b1111111;
+        #10;
+        if (reg_write !== 1'b0 ||
+            mem_read !== 1'b0 ||
+            mem_write !== 1'b0 ||
+            branch !== 1'b0 ||
+            jump !== 1'b0)
+            $fatal(1, "FAIL: Unsupported opcode");
+
+        $display("PASS: All main control tests completed.");
+        $finish;
+
+    end
+endmodule

@@ -1,0 +1,166 @@
+// design source of Register File//
+`timescale 1ns / 1ps
+module register_file(
+    input  wire        clk,
+    input  wire        reset,
+    input  wire        reg_write,
+
+    input  wire [4:0]  rs1,
+    input  wire [4:0]  rs2,
+    input  wire [4:0]  rd,
+
+    input  wire [31:0] write_data,
+
+    output wire [31:0] read_data1,
+    output wire [31:0] read_data2
+    );
+    reg [31:0] registers [0:31];
+    integer i;
+
+    // Synchronous reset
+    always @(posedge clk) begin
+        if (reset) begin
+            for (i = 0; i < 32; i = i + 1)
+                registers[i] <= 32'b0;
+        end
+        else if (reg_write && (rd != 5'd0)) begin
+            registers[rd] <= write_data;
+        end
+    end
+
+    // Combinational read port 1
+    assign read_data1 =
+        (rs1 == 5'd0) ? 32'b0 : registers[rs1];
+
+    // Combinational read port 2
+    assign read_data2 =
+        (rs2 == 5'd0) ? 32'b0 : registers[rs2];
+
+endmodule
+
+
+//testbench code//
+
+`timescale 1ns / 1ps
+module tb_register_file(
+
+    );
+     reg clk;
+    reg reset;
+    reg reg_write;
+
+    reg [4:0] rs1;
+    reg [4:0] rs2;
+    reg [4:0] rd;
+
+    reg [31:0] write_data;
+
+    wire [31:0] read_data1;
+    wire [31:0] read_data2;
+
+    register_file dut (
+        .clk(clk),
+        .reset(reset),
+        .reg_write(reg_write),
+        .rs1(rs1),
+        .rs2(rs2),
+        .rd(rd),
+        .write_data(write_data),
+        .read_data1(read_data1),
+        .read_data2(read_data2)
+    );
+
+    // 10 ns clock period
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        reset      = 1'b1;
+        reg_write  = 1'b0;
+        rs1        = 5'd0;
+        rs2        = 5'd0;
+        rd         = 5'd0;
+        write_data = 32'b0;
+
+        // Reset all registers
+        @(posedge clk);
+        #1;
+        reset = 1'b0;
+
+        // Write 10 to x1
+        @(negedge clk);
+        reg_write  = 1'b1;
+        rd         = 5'd1;
+        write_data = 32'd10;
+
+        @(posedge clk);
+        #1;
+        if (dut.registers[1] !== 32'd10)
+            $fatal(1, "FAIL: Write to x1");
+
+        // Write 20 to x2
+        @(negedge clk);
+        rd         = 5'd2;
+        write_data = 32'd20;
+
+        @(posedge clk);
+        #1;
+        if (dut.registers[2] !== 32'd20)
+            $fatal(1, "FAIL: Write to x2");
+
+        // Read x1 and x2 simultaneously
+        @(negedge clk);
+        reg_write = 1'b0;
+        rs1 = 5'd1;
+        rs2 = 5'd2;
+        #1;
+
+        if (read_data1 !== 32'd10)
+            $fatal(1, "FAIL: Read x1");
+
+        if (read_data2 !== 32'd20)
+            $fatal(1, "FAIL: Read x2");
+
+        // x0 must always read zero
+        rs1 = 5'd0;
+        rs2 = 5'd0;
+        #1;
+
+        if (read_data1 !== 32'd0 ||
+            read_data2 !== 32'd0)
+            $fatal(1, "FAIL: x0 must read zero");
+
+        // Attempt to write 99 to x0
+        @(negedge clk);
+        reg_write  = 1'b1;
+        rd         = 5'd0;
+        write_data = 32'd99;
+
+        @(posedge clk);
+        #1;
+
+        if (dut.registers[0] !== 32'd0)
+            $fatal(1, "FAIL: x0 storage changed");
+
+        if (read_data1 !== 32'd0)
+            $fatal(1, "FAIL: x0 output changed");
+
+        // Write disabled: x1 must remain 10
+        @(negedge clk);
+        reg_write  = 1'b0;
+        rd         = 5'd1;
+        write_data = 32'd99;
+
+        @(posedge clk);
+        #1;
+
+        if (dut.registers[1] !== 32'd10)
+            $fatal(1, "FAIL: Write occurred while disabled");
+
+        $display("PASS: All register file tests completed.");
+        $finish;
+    end
+
+endmodule
